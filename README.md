@@ -17,3 +17,7 @@ NotAllowedError: play() failed because the user didn't interact with the documen
 ```
 
 4. click **button** in sender.html to shaing
+
+## Example
+
+[](example.png)
