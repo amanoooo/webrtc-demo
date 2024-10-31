@@ -20,4 +20,4 @@ NotAllowedError: play() failed because the user didn't interact with the documen
 
 ## Example
 
-[](example.png)
+![](example.png)
