@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>屏幕共享 - 共享端</title>
+</head>
+
+<body>
+    <h2>屏幕共享 - 共享端</h2>
+    <button id="shareScreen">开始共享屏幕</button>
+
+    <script>
+        // const ws = new WebSocket('wss://6d76-58-38-98-203.ngrok-free.app');
+        const ws = new WebSocket('ws://localhost:3000');
+        const peerConnection = new RTCPeerConnection();
+
+        // 处理ICE候选
+        peerConnection.onicecandidate = event => {
+            console.log('onicecandidate ', event);
+            if (event.candidate) {
+                ws.send(JSON.stringify({ type: 'candidate', candidate: event.candidate }));
+            }
+        };
+
+        // 发送视频流
+        async function startScreenShare() {
+            const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+            console.log("成功捕获屏幕流", screenStream); // 调试信息
+
+            screenStream.getTracks().forEach(track => peerConnection.addTrack(track, screenStream));
+
+            const offer = await peerConnection.createOffer();
+            await peerConnection.setLocalDescription(offer);
+
+            ws.send(JSON.stringify({ type: 'offer', sdp: offer }));
+        }
+
+        // 监听WebSocket消息
+        ws.onmessage = async message => {
+            //   const data = JSON.parse(message.data);
+            const data = JSON.parse(await message.data.text());
+            console.log('onmessage', data);
+
+            if (data.type === 'answer') {
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp));
+            } else if (data.type === 'candidate') {
+                await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+            }
+        };
+
+        document.getElementById('shareScreen').onclick = startScreenShare;
+    </script>
+</body>
+
+</html>

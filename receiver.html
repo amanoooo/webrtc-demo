@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>屏幕共享 - 接收端</title>
+</head>
+
+<body>
+    <h2>屏幕共享 - 接收端</h2>
+    <button id="startButton">开始播放视频</button>
+    <video id="remoteVideo" autoplay playsinline></video>
+
+    <script>
+        // const ws = new WebSocket('wss://6d76-58-38-98-203.ngrok-free.app');
+        const ws = new WebSocket('ws://localhost:3000');
+
+        const peerConnection = new RTCPeerConnection();
+        const candidateQueue = []; // 用于暂存ICE候选者
+        let isPlaying = false;
+
+
+        // 处理接收到的视频流
+        peerConnection.ontrack = event => {
+            const [stream] = event.streams;
+            console.log("接收到视频流", stream); // 调试信息
+
+            document.getElementById('remoteVideo').srcObject = stream;
+            // 只在用户交互后播放
+            if (!isPlaying) {
+                remoteVideo.play().then(() => {
+                    isPlaying = true; // 成功播放后标记为已播放
+                }).catch(error => {
+                    console.error("播放视频失败:", error);
+                });
+            }
+        };
+
+        // 处理ICE候选
+        peerConnection.onicecandidate = event => {
+            if (event.candidate) {
+                ws.send(JSON.stringify({ type: 'candidate', candidate: event.candidate }));
+            }
+        };
+
+        peerConnection.onconnectionstatechange = () => {
+            console.log("连接状态:", peerConnection.connectionState);
+        };
+
+        // 监听WebSocket消息
+        ws.onmessage = async message => {
+            // const data = JSON.parse(message.data);
+            const data = JSON.parse(await message.data.text());
+            console.log('onmessage: ', data);
+            if (data.type === 'offer') {
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp));
+                const answer = await peerConnection.createAnswer();
+                await peerConnection.setLocalDescription(answer);
+
+                ws.send(JSON.stringify({ type: 'answer', sdp: answer }));
+
+                // 远程描述设置完成后，添加排队中的ICE候选者
+                candidateQueue.forEach(async candidate => {
+                    await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+                });
+                candidateQueue.length = 0; // 清空队列
+            } else if (data.type === 'candidate') {
+                // 检查远程描述是否已设置
+                if (peerConnection.remoteDescription) {
+                    await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+                } else {
+                    candidateQueue.push(data.candidate); // 如果未设置远程描述，则先存储候选者
+                }
+            }
+        };
+
+        // 在页面加载时添加一个用户交互事件，比如按钮点击
+        document.getElementById('startButton').onclick = () => {
+            // 用户点击按钮后，可以开始播放
+            if (!isPlaying) {
+                remoteVideo.play().then(() => {
+                    isPlaying = true; // 成功播放后标记为已播放
+                }).catch(error => {
+                    console.error("播放视频失败:", error);
+                });
+            }
+        };
+    </script>
+</body>
+
+</html>
